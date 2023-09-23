@@ -34,6 +34,7 @@ html,body{
 .main{
     background-color: #C4BCB2;
     position: relative;
+    overflow: hidden;
 }
 
 .page1{
@@ -83,7 +84,7 @@ html,body{
 .elem1{
     height: 100%;
     width: 35%;
-    padding: 0px 60px;
+    padding: 0px 30px;
     /* position: relative; */
     border-right: 1px solid #706f6f;
     display: flex;
@@ -110,7 +111,7 @@ html,body{
 .elem2{
     height: 100%;
     width: 30%;
-    padding: 0px 60px;
+    padding: 0px 30px;
     position: relative;
     border-right: 1px solid #706f6f;
     text-align: center;
@@ -122,7 +123,7 @@ html,body{
 .elem3{
     height: 100%;
     width: 35%;
-    padding: 0px 60px;
+    padding: 0px 30px;
     position: relative;
     border-right: 1px solid #706f6f;
     display: flex;
@@ -388,9 +389,9 @@ html,body{
 }
 
 .page4{
-    margin: 80px 0px 0px 0px;
+    margin: 40px 0px 0px 0px;
     white-space: nowrap;
-    padding: 50px 0px 50px 0px;
+    padding: 50px 0px;
     border: 1px solid #706f6f;
 }
 
@@ -437,4 +438,228 @@ html,body{
 
 .page4:hover h1{
     animation-play-state: paused;
+}
+
+.page6{
+    height: 150px;
+    /* background-color: red; */
+    margin-top: 90px;
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #706f6f;
+}
+
+.p6elem1{
+    display: flex;
+    align-items: center;
+    /* justify-content: centers; */
+}
+
+.inner{
+    display: flex;
+    flex-direction: column;
+}
+
+.inner .head1{
+    font-family: chirag;
+    text-transform: uppercase;
+    font-size: 28px;
+    color:#252525;
+}
+
+.inner .head2{
+    font-family: chacha;
+    font-size: 60px;
+    color:#252525;
+}
+
+.head3{
+    font-size: 118px;
+    margin-left: 8px;
+    font-weight: 200;
+    color:#252525;
+}
+
+.page7{
+    /* background-color: red; */
+    margin-top: 50px;
+    padding: 0px 30px;
+    width: 100vw;
+    display: flex;
+}
+.page7 .left{
+    width: 50%;
+    height: 600px;
+    padding: 0px 30px 0px 0px;
+
+}
+
+.page7 .right{
+    width: 50%;
+    height: 600px;
+    padding: 0px 0px 0px 30px;
+}
+
+.page7 .right img{
+    object-fit: cover;
+    height: 100%;
+    width: 100%;
+    border: 1.5px solid #000;
+}
+
+.page7 .left .h1{
+    height: 285px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    overflow: hidden;
+    color: #252525;margin-bottom: 30px;
+}
+
+.page7 .left .h1 img{
+    height: 100%;
+    width: 35%;
+    object-fit: cover;
+    border: 1.5px solid #000000;
+}
+
+.page7 .left .h1 h1{
+    font-size: 399px;
+    line-height: 285px;
+    font-family: chacha;
+}
+
+.page7 .left .h2 h1{
+    font-size: 399px;
+    line-height: 285px;
+    font-family: chacha;
+    color: #252525;
+}
+
+.page8{
+    height: 285px;
+    width: 100%;
+    padding: 0px 30px;
+    margin-top: 30px;
+    display: flex;
+    align-items: center;
+}
+
+.page8 .left{
+    height: 100%;
+    width: 25%;
+}
+
+.page8 .left img{
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+    border: 1.5px solid #000000;
+}
+
+.page8 .right h1{
+    margin-left: 30px;
+    overflow: hidden;
+    font-size: 395px;
+    line-height: 285px;
+    font-family: chacha;
+    color: #252525;
+}
+
+.page9{
+    width: 100vw;
+}
+
+.page9 .one{
+    margin: 30px 0px 30px 0px;
+    display: flex;
+    padding: 0px 30px;
+    justify-content: space-between;
+    gap: 30px;
+}
+
+.page9 .one p{
+    font-size: 20.5px;
+}
+
+.page9 .one h1{
+    font-size: 380px;
+    line-height: 340px;
+    color: #C4BCB2;
+    font-family: chacha;
+    text-align: center;
+    background-color: #222;
+    width: 100%;
+}
+
+.page10{
+    height: 300px;
+    margin-bottom: 30px;
+    position: relative;
+    padding: 0px 30px;
+    overflow-x: scroll;
+}
+.page10 .box{
+    position: absolute;
+    margin-top: 0px;
+    height: 100%;
+    width: 40%;
+    border: 2.5px solid #252525;
+    border-radius: 15px;
+    padding: 15px 15px 15px 15px;
+    text-decoration: underline;
+    font-size: 24px;
+    font-weight: 100;
+    font-family: chintu;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    justify-content: flex-start;
+    color: #252525;
+}
+
+.page10 .box1{
+    z-index: 1;
+    background-color: #C4BCB2;
+}
+
+.page10 .box2{
+    background-color: #C4BCB2;
+    /* background-color: red; */
+    margin-left: 18.5%;
+    z-index: 2;
+    transition: ease-in-out 0.5s;
+}
+
+.page10 .box3{
+    background-color: #C4BCB2;
+    /* background-color: green; */
+    margin-left: 37%;
+    z-index: 3;
+    transition: all ease 0.52s;
+}
+
+.page10 .box4{
+    background-color: #C4BCB2;
+    /* background-color: yellow; */
+    z-index: 4;
+    margin-left: 56%;
+    transition: all ease 0.54s;
+}
+
+.page10 .box span{
+    font-weight: 100;
+    font-size: 20px;
+    font-family: serif;
+}
+
+.page10 .box .inner{
+    height: 100%;
+    width: 100%;
+    border: 1px #252525 dashed;
+    border-radius: 15px;
+    padding: 15px;
 }
