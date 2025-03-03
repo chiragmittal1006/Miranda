@@ -1,32 +1,69 @@
-// data.service.ts
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+<!-- dashboard.component.html -->
+<div class="dashboard">
+    <h1>Manager Dashboard</h1>
+  
+    <mat-form-field appearance="fill">
+      <mat-label>Filter</mat-label>
+      <mat-select [(value)]="selectedFilter" (selectionChange)="onFilterChange($event.value)">
+        <mat-option *ngFor="let option of filterOptions" [value]="option">{{ option }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  
+    <section>
+      <h2>Analysis</h2>
+      <div class="chart-container">
+        <canvas id="analysisChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>My Daily Tasks</h2>
+      <div class="chart-container">
+        <canvas id="dailyTasksChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>Shipment Statistics</h2>
+      <div class="chart-container">
+        <canvas id="shipmentStatsChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>Food Safety Blog Post</h2>
+      <div class="blog-post" *ngIf="blogPostData">
+        <img [src]="blogPostData.image" alt="Blog Image">
+        <h3>{{ blogPostData.title }}</h3>
+        <p>{{ blogPostData.date }}</p>
+      </div>
+    </section>
+  </div>
 
-@Injectable({
-  providedIn: 'root'
-})
-export class DataService {
-  private analysisUrl = 'assets/analysis.json';
-  private dailyTasksUrl = 'assets/daily-tasks.json';
-  private shipmentStatsUrl = 'assets/shipment-stats.json';
-  private blogPostUrl = 'assets/blog-post.json';
+  
 
-  constructor(private http: HttpClient) {}
+  /* dashboard.component.css */
+.dashboard {
+  padding: 20px;
+}
 
-  getAnalysisData(): Observable<any> {
-    return this.http.get<any>(this.analysisUrl);
-  }
+.mat-form-field {
+  width: 200px;
+}
 
-  getDailyTasksData(): Observable<any> {
-    return this.http.get<any>(this.dailyTasksUrl);
-  }
+.chart-container {
+  width: 100%;
+  height: 300px;
+  margin-bottom: 20px;
+}
 
-  getShipmentStatsData(): Observable<any> {
-    return this.http.get<any>(this.shipmentStatsUrl);
-  }
+canvas {
+  width: 100%;
+  height: auto;
+}
 
-  getBlogPostData(): Observable<any> {
-    return this.http.get<any>(this.blogPostUrl);
-  }
+.blog-post img {
+  width: 100%;
+  height: auto;
+  margin-bottom: 10px;
 }
