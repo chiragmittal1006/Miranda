@@ -1,0 +1,263 @@
+// dashboard.component.ts
+import { Component, OnInit } from '@angular/core';
+import { DataService } from '../data.service';
+import { Chart, registerables } from 'chart.js';
+import { HttpClientModule } from '@angular/common/http';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+
+Chart.register(...registerables);
+
+@Component({
+  selector: 'app-dashboard',
+  templateUrl: './dashboard.component.html',
+  styleUrls: ['./dashboard.component.css'],
+  standalone: true,
+  imports: [
+    HttpClientModule,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule
+  ]
+})
+export class DashboardComponent implements OnInit {
+  filterOptions: string[] = ['Last 1 Year', 'Last 6 Months', 'Last 1 Month', 'Last Week'];
+  selectedFilter: string = 'Last 1 Year';
+  analysisData: any;
+  dailyTasksData: any;
+  shipmentStatsData: any;
+  blogPostData: any;
+
+  constructor(private dataService: DataService) {}
+
+  ngOnInit() {
+    this.loadData();
+  }
+
+  loadData() {
+    this.dataService.getAnalysisData().subscribe(data => {
+      this.analysisData = data;
+      this.createAnalysisChart();
+    });
+    this.dataService.getDailyTasksData().subscribe(data => {
+      this.dailyTasksData = data;
+      this.createDailyTasksChart();
+    });
+    this.dataService.getShipmentStatsData().subscribe(data => {
+      this.shipmentStatsData = data;
+      this.createShipmentStatsChart();
+    });
+    this.dataService.getBlogPostData().subscribe(data => {
+      this.blogPostData = data;
+    });
+  }
+
+  onFilterChange(filter: string) {
+    this.selectedFilter = filter;
+    this.loadData();
+  }
+
+  createAnalysisChart() {
+    const ctx = document.getElementById('analysisChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: this.analysisData.map(item => item.date),
+        datasets: [
+          {
+            label: 'Active Orders',
+            data: this.analysisData.map(item => item.activeOrders),
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Inactive Orders',
+            data: this.analysisData.map(item => item.inactiveOrders),
+            type: 'line',
+            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Active and Inactive Orders Analysis'
+          }
+        }
+      }
+    });
+  }
+
+  createDailyTasksChart() {
+    const ctx = document.getElementById('dailyTasksChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: this.dailyTasksData.map(item => item.task),
+        datasets: [{
+          data: this.dailyTasksData.map(item => item.count),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+            'rgba(75, 192, 192, 0.5)',
+            'rgba(153, 102, 255, 0.5)',
+            'rgba(255, 159, 64, 0.5)'
+          ],
+          borderColor: [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Daily Tasks Distribution'
+          }
+        }
+      }
+    });
+  }
+
+  createShipmentStatsChart() {
+    const ctx = document.getElementById('shipmentStatsChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: this.shipmentStatsData.map(item => item.status),
+        datasets: [{
+          data: this.shipmentStatsData.map(item => item.count),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+            'rgba(75, 192, 192, 0.5)',
+            'rgba(153, 102, 255, 0.5)',
+            'rgba(255, 159, 64, 0.5)'
+          ],
+          borderColor: [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Shipment Statistics'
+          }
+        }
+      }
+    });
+  }
+}
+
+
+
+
+//mfnoibiuosdlsdfbcsamdknn
+
+
+<!-- dashboard.component.html -->
+<div class="dashboard">
+    <h1>Manager Dashboard</h1>
+  
+    <mat-form-field appearance="fill">
+      <mat-label>Filter</mat-label>
+      <mat-select [(value)]="selectedFilter" (selectionChange)="onFilterChange($event.value)">
+        <mat-option *ngFor="let option of filterOptions" [value]="option">{{ option }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  
+    <section>
+      <h2>Analysis</h2>
+      <div class="chart-container">
+        <canvas id="analysisChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>My Daily Tasks</h2>
+      <div class="chart-container">
+        <canvas id="dailyTasksChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>Shipment Statistics</h2>
+      <div class="chart-container">
+        <canvas id="shipmentStatsChart"></canvas>
+      </div>
+    </section>
+  
+    <section>
+      <h2>Food Safety Blog Post</h2>
+      <div class="blog-post" *ngIf="blogPostData">
+        <img [src]="blogPostData.image" alt="Blog Image">
+        <h3>{{ blogPostData.title }}</h3>
+        <p>{{ blogPostData.date }}</p>
+      </div>
+    </section>
+  </div>
+
+  
+  //vfendbjvskdfvdo
+
+
+  /* dashboard.component.css */
+.dashboard {
+  padding: 20px;
+}
+
+.mat-form-field {
+  width: 200px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 300px;
+  margin-bottom: 20px;
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+}
+
+.blog-post img {
+  width: 100%;
+  height: auto;
+  margin-bottom: 10px;
+}
