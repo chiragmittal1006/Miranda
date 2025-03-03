@@ -1,3 +1,203 @@
+// data.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class DataService {
+  private dbUrl = 'assets/db.json';
+
+  constructor(private http: HttpClient) {}
+
+  getDashboardData(): Observable<any> {
+    return this.http.get<any>(this.dbUrl);
+  }
+}
+
+
+// dashboard.component.ts
+import { Component, OnInit } from '@angular/core';
+import { DataService } from '../data.service';
+import { Chart, registerables } from 'chart.js';
+import { HttpClientModule } from '@angular/common/http';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+
+Chart.register(...registerables);
+
+@Component({
+  selector: 'app-dashboard',
+  templateUrl: './dashboard.component.html',
+  styleUrls: ['./dashboard.component.css'],
+  standalone: true,
+  imports: [
+    HttpClientModule,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule
+  ]
+})
+export class DashboardComponent implements OnInit {
+  filterOptions: string[] = ['Last 1 Year', 'Last 6 Months', 'Last 1 Month', 'Last Week'];
+  selectedFilter: string = 'Last 1 Year';
+  analysisData: any;
+  dailyTasksData: any;
+  shipmentStatsData: any;
+  blogPostData: any;
+
+  constructor(private dataService: DataService) {}
+
+  ngOnInit() {
+    this.loadData();
+  }
+
+  loadData() {
+    this.dataService.getDashboardData().subscribe(data => {
+      this.analysisData = data.analysis;
+      this.dailyTasksData = data.dailyTasks;
+      this.shipmentStatsData = data.shipmentStats;
+      this.blogPostData = data.blogPost;
+      this.createAnalysisChart();
+      this.createDailyTasksChart();
+      this.createShipmentStatsChart();
+    });
+  }
+
+  onFilterChange(filter: string) {
+    this.selectedFilter = filter;
+    this.loadData(); // Reload data based on the selected filter
+  }
+
+  createAnalysisChart() {
+    const ctx = document.getElementById('analysisChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: this.analysisData.map(item => item.date),
+        datasets: [
+          {
+            label: 'Active Orders',
+            data: this.analysisData.map(item => item.activeOrders),
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Inactive Orders',
+            data: this.analysisData.map(item => item.inactiveOrders),
+            type: 'line',
+            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Active and Inactive Orders Analysis'
+          }
+        }
+      }
+    });
+  }
+
+  createDailyTasksChart() {
+    const ctx = document.getElementById('dailyTasksChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: this.dailyTasksData.map(item => item.task),
+        datasets: [{
+          data: this.dailyTasksData.map(item => item.count),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+            'rgba(75, 192, 192, 0.5)',
+            'rgba(153, 102, 255, 0.5)',
+            'rgba(255, 159, 64, 0.5)'
+          ],
+          borderColor: [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Daily Tasks Distribution'
+          }
+        }
+      }
+    });
+  }
+
+  createShipmentStatsChart() {
+    const ctx = document.getElementById('shipmentStatsChart') as HTMLCanvasElement;
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: this.shipmentStatsData.map(item => item.status),
+        datasets: [{
+          data: this.shipmentStatsData.map(item => item.count),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+            'rgba(75, 192, 192, 0.5)',
+            'rgba(153, 102, 255, 0.5)',
+            'rgba(255, 159, 64, 0.5)'
+          ],
+          borderColor: [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: 'Shipment Statistics'
+          }
+        }
+      }
+    });
+  }
+}
+
+
 <!-- dashboard.component.html -->
 <div class="dashboard">
     <h1>Manager Dashboard</h1>
@@ -41,7 +241,6 @@
   </div>
 
   
-
   /* dashboard.component.css */
 .dashboard {
   padding: 20px;
@@ -67,3 +266,40 @@ canvas {
   height: auto;
   margin-bottom: 10px;
 }
+
+
+{
+    "analysis": [
+      { "date": "2024-01-01", "activeOrders": 120, "inactiveOrders": 80 },
+      { "date": "2024-02-01", "activeOrders": 150, "inactiveOrders": 70 },
+      { "date": "2024-03-01", "activeOrders": 130, "inactiveOrders": 60 },
+      { "date": "2024-04-01", "activeOrders": 140, "inactiveOrders": 50 },
+      { "date": "2024-05-01", "activeOrders": 160, "inactiveOrders": 40 },
+      { "date": "2024-06-01", "activeOrders": 170, "inactiveOrders": 30 },
+      { "date": "2024-07-01", "activeOrders": 180, "inactiveOrders": 20 },
+      { "date": "2024-08-01", "activeOrders": 190, "inactiveOrders": 10 },
+      { "date": "2024-09-01", "activeOrders": 200, "inactiveOrders": 5 },
+      { "date": "2024-10-01", "activeOrders": 210, "inactiveOrders": 2 },
+      { "date": "2024-11-01", "activeOrders": 220, "inactiveOrders": 1 },
+      { "date": "2024-12-01", "activeOrders": 230, "inactiveOrders": 0 }
+    ],
+    "dailyTasks": [
+      { "task": "Order Processing", "count": 25 },
+      { "task": "Inventory Management", "count": 15 },
+      { "task": "Customer Support", "count": 10 },
+      { "task": "Supplier Coordination", "count": 8 },
+      { "task": "Report Generation", "count": 5 }
+    ],
+    "shipmentStats": [
+      { "status": "Delivered", "count": 100 },
+      { "status": "In Transit", "count": 50 },
+      { "status": "Pending", "count": 20 },
+      { "status": "Cancelled", "count": 5 }
+    ],
+    "blogPost": {
+      "image": "assets/blog-image.jpg",
+      "date": "2024-05-15",
+      "title": "Food Safety Tips for Grocery Stores"
+    }
+  }
+  
