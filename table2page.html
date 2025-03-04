@@ -1,277 +1,247 @@
-import { Component, Input, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
-import { MatTableDataSource } from '@angular/material/table';
-import { MatPaginator } from '@angular/material/paginator';
+<!-- task service.ts -->
 
-@Component({
-  selector: 'app-table',
-  templateUrl: './table.component.html',
-  styleUrls: ['./table.component.css']
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
 })
-export class TableComponent implements OnChanges, AfterViewInit {
-  @Input() headers: string[];
-  @Input() rows: any[] = [];
-  // A string to filter the table data. For example "In Transit" filter will show only rows where any cell contains that string.
-  @Input() filter: string = '';
+export class TaskService {
+  private apiUrl = 'http://localhost:4200/Stock.json';
 
-  dataSource = new MatTableDataSource<any>();
+  constructor(private http: HttpClient) {}
 
-  @ViewChild(MatPaginator) paginator: MatPaginator;
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes.rows) {
-      this.dataSource.data = this.rows || [];
-    }
-    if (changes.filter) {
-      this.applyFilter();
-    }
-    if (this.headers) {
-      // Set displayedColumns from headers.
-      this.dataSource.paginator = this.paginator;
-    }
+  addTask(task: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/tasks`, task);
   }
 
-  ngAfterViewInit(): void {
-    this.dataSource.paginator = this.paginator;
-    // Use a custom filter predicate that searches through all row property values.
-    this.dataSource.filterPredicate = (data: any, filter: string): boolean => {
-      const accumulator = (currentTerm, key) => {
-        return currentTerm + (data[key] ? data[key].toString().toLowerCase() : '');
-      };
-      const dataStr = this.headers.reduce(accumulator, '');
-      return dataStr.indexOf(filter.trim().toLowerCase()) !== -1;
-    };
-    this.applyFilter();
-  }
-
-  applyFilter(): void {
-    this.dataSource.filter = this.filter;
-    if (this.dataSource.paginator) {
-      this.dataSource.paginator.firstPage();
-    }
+  addStock(stock: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/stocks`, stock);
   }
 }
 
-<!-- shared/table/table.component.html -->
-<div class="table-container">
-    <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">
-  
-      <!-- Dynamically generate column definitions -->
-      <ng-container *ngFor="let column of headers" [matColumnDef]="column">
-        <th mat-header-cell *matHeaderCellDef> {{ column }} </th>
-        <td mat-cell *matCellDef="let element"> {{ element[column] }} </td>
-      </ng-container>
-  
-      <tr mat-header-row *matHeaderRowDef="headers"></tr>
-      <tr mat-row *matRowDef="let row; columns: headers;"></tr>
-    </table>
-    <mat-paginator [pageSize]="10" showFirstLastButtons></mat-paginator>
-  </div>
 
-  <!-- service -->
-  import { Injectable } from '@angular/core';
-  import { HttpClient } from '@angular/common/http';
-  import { Observable } from 'rxjs';
-  
-  @Injectable({
-    providedIn: 'root'
-  })
-  export class DataService {
-    private dbUrl = 'assets/db.json';
-  
-    constructor(private http: HttpClient) { }
-  
-    // Adjust this method according to your JSON structure.
-    getTableData(): Observable<any[]> {
-      return this.http.get<any[]>(this.dbUrl);
-    }
-  }
-  
+<!-- 4. Component (task-form.component.ts) -->
 
-  <!-- stock-management.component.ts -->
-
-  import { Component, OnInit } from '@angular/core';
-import { DataService } from '../data.service';
-import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule } from '@angular/forms';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
-import { TableComponent } from '../shared/table/table.component';
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { TaskService } from '../services/task.service';
 
 @Component({
-  selector: 'app-stock-management',
-  templateUrl: './stock-management.component.html',
-  styleUrls: ['./stock-management.component.css'],
-  standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatFormFieldModule, MatSelectModule, TableComponent]
+  selector: 'app-task-form',
+  templateUrl: './task-form.component.html',
+  styleUrls: ['./task-form.component.css']
 })
-export class StockManagementComponent implements OnInit {
-  filterOptions: string[] = ['All', 'In Transit', 'Delivered', 'Pending', 'Cancelled'];
-  selectedFilter: string = 'All';
-  // Define headers matching the keys of each row object.
-  tableHeaders: string[] = ['ShipmentID', 'ShipperName', 'PhoneNumber', 'Status', 'Product', 'Supplier', 'Quantity', 'Price', 'Track'];
-  tableRows: any[] = [];
-  // This filter string is passed to the shared table component.
-  filterValue: string = '';
+export class TaskFormComponent {
+  taskForm: FormGroup;
+  stockForm: FormGroup;
+  activeTab: string = 'task'; // 'task' or 'stock'
 
-  constructor(private dataService: DataService) { }
+  constructor(private fb: FormBuilder, private taskService: TaskService) {
+    this.taskForm = this.fb.group({
+      taskType: ['', Validators.required],
+      assignee: ['', Validators.required],
+      priority: ['', Validators.required],
+      dateTime: ['', Validators.required],
+      location: ['', Validators.required]
+    });
 
-  ngOnInit(): void {
-    this.loadTableData();
-  }
-
-  loadTableData(): void {
-    this.dataService.getTableData().subscribe(data => {
-      // Assuming that the db.json returns an array of rows.
-      this.tableRows = data;
+    this.stockForm = this.fb.group({
+      productType: ['', Validators.required],
+      supplier: ['', Validators.required],
+      totalQuantity: [0, Validators.required],
+      price: [0, Validators.required],
+      sellingPrice: ['', Validators.required]
     });
   }
 
-  onFilterChange(newFilter: string): void {
-    this.selectedFilter = newFilter;
-    // If "All" is selected, clear the filter; otherwise use the filter text.
-    this.filterValue = newFilter === 'All' ? '' : newFilter.toLowerCase();
+  setTab(tab: string) {
+    this.activeTab = tab;
+  }
+
+  submitTask() {
+    if (this.taskForm.valid) {
+      this.taskService.addTask(this.taskForm.value).subscribe(() => {
+        alert('Task added successfully!');
+        this.taskForm.reset();
+      });
+    }
+  }
+
+  submitStock() {
+    if (this.stockForm.valid) {
+      this.taskService.addStock(this.stockForm.value).subscribe(() => {
+        alert('Stock added successfully!');
+        this.stockForm.reset();
+      });
+    }
   }
 }
 
-<!-- stock-management.component.html -->
-<div class="stock-management">
-    <h1>Stock Management</h1>
-    <mat-form-field appearance="fill">
-      <mat-label>Filter by Status</mat-label>
-      <mat-select [(value)]="selectedFilter" (selectionChange)="onFilterChange($event.value)">
-        <mat-option *ngFor="let option of filterOptions" [value]="option">
-          {{ option }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+
+<!-- 5. Template (task-form.component.html) -->
+
+<div class="modal">
+    <div class="modal-content">
+      <h2>Create New Task</h2>
+      <div class="tabs">
+        <span [class.active]="activeTab === 'task'" (click)="setTab('task')">Task Assignments</span>
+        <span [class.active]="activeTab === 'stock'" (click)="setTab('stock')">Add New Stock</span>
+      </div>
   
-    <!-- The shared table component is used here -->
-    <app-table [headers]="tableHeaders" [rows]="tableRows" [filter]="filterValue"></app-table>
+      <!-- Task Form -->
+      <form *ngIf="activeTab === 'task'" [formGroup]="taskForm" (ngSubmit)="submitTask()">
+        <label>Task Type</label>
+        <select formControlName="taskType">
+          <option value="">Select</option>
+          <option value="Delivery">Delivery</option>
+          <option value="Stock Update">Stock Update</option>
+        </select>
+  
+        <label>Assignee</label>
+        <select formControlName="assignee">
+          <option value="">Select</option>
+          <option value="John Doe">John Doe</option>
+          <option value="Jane Smith">Jane Smith</option>
+        </select>
+  
+        <label>Priority Level</label>
+        <div class="priority">
+          <input type="radio" formControlName="priority" value="Critical" /> Critical
+          <input type="radio" formControlName="priority" value="Severe" /> Severe
+          <input type="radio" formControlName="priority" value="Normal" /> Normal
+        </div>
+  
+        <label>Date & Time</label>
+        <input type="date" formControlName="dateTime" />
+  
+        <label>Location</label>
+        <input type="text" formControlName="location" placeholder="Type Location" />
+  
+        <div class="actions">
+          <button type="button" class="cancel">Cancel</button>
+          <button type="submit" class="create">Create</button>
+        </div>
+      </form>
+  
+      <!-- Stock Form -->
+      <form *ngIf="activeTab === 'stock'" [formGroup]="stockForm" (ngSubmit)="submitStock()">
+        <label>Product Type</label>
+        <select formControlName="productType">
+          <option value="">Select</option>
+          <option value="Vegetables">Vegetables</option>
+          <option value="Dairy">Dairy</option>
+        </select>
+  
+        <label>Supplier</label>
+        <select formControlName="supplier">
+          <option value="">Select</option>
+          <option value="Supplier A">Supplier A</option>
+          <option value="Supplier B">Supplier B</option>
+        </select>
+  
+        <label>Total Quantity</label>
+        <input type="range" formControlName="totalQuantity" min="0" max="500" />
+  
+        <label>Price</label>
+        <input type="range" formControlName="price" min="0" max="1000" />
+  
+        <label>Selling Price</label>
+        <select formControlName="sellingPrice">
+          <option value="">Select</option>
+          <option value="Retail">Retail</option>
+          <option value="Wholesale">Wholesale</option>
+        </select>
+  
+        <div class="actions">
+          <button type="button" class="cancel">Cancel</button>
+          <button type="submit" class="create">Create</button>
+        </div>
+      </form>
+    </div>
   </div>
 
-  <!-- stock-management.component.css -->
   
-  .stock-management {
-    padding: 20px;
+  <!-- 6. CSS (task-form.component.css) -->
+
+  .modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
   }
   
-  mat-form-field {
-    width: 300px;
+  .modal-content {
+    background: white;
+    padding: 20px;
+    width: 400px;
+    border-radius: 10px;
+  }
+  
+  h2 {
+    margin: 0 0 15px;
+  }
+  
+  .tabs {
+    display: flex;
+    justify-content: space-between;
     margin-bottom: 20px;
   }
   
-
-  <!-- db.json -->
-
-  [
-  {
-    "ShipmentID": "S001",
-    "ShipperName": "Fast Logistics",
-    "PhoneNumber": "1234567890",
-    "Status": "In Transit",
-    "Product": "Laptop",
-    "Supplier": "Dell",
-    "Quantity": 10,
-    "Price": "$1000",
-    "Track": "Track Link 1"
-  },
-  {
-    "ShipmentID": "S002",
-    "ShipperName": "Speedy Delivery",
-    "PhoneNumber": "0987654321",
-    "Status": "Delivered",
-    "Product": "Smartphone",
-    "Supplier": "Samsung",
-    "Quantity": 20,
-    "Price": "$800",
-    "Track": "Track Link 2"
-  },
-  {
-    "ShipmentID": "S003",
-    "ShipperName": "Express Couriers",
-    "PhoneNumber": "444555666",
-    "Status": "Pending",
-    "Product": "Headphones",
-    "Supplier": "Sony",
-    "Quantity": 15,
-    "Price": "$150",
-    "Track": "Track Link 3"
-  },
-  {
-    "ShipmentID": "S004",
-    "ShipperName": "Fast Logistics",
-    "PhoneNumber": "1234567890",
-    "Status": "Cancelled",
-    "Product": "Monitor",
-    "Supplier": "LG",
-    "Quantity": 5,
-    "Price": "$300",
-    "Track": "Track Link 4"
-  },
-  {
-    "ShipmentID": "S005",
-    "ShipperName": "Speedy Delivery",
-    "PhoneNumber": "0987654321",
-    "Status": "In Transit",
-    "Product": "Keyboard",
-    "Supplier": "Logitech",
-    "Quantity": 25,
-    "Price": "$50",
-    "Track": "Track Link 5"
-  },
-  {
-    "ShipmentID": "S006",
-    "ShipperName": "Express Couriers",
-    "PhoneNumber": "444555666",
-    "Status": "Delivered",
-    "Product": "Mouse",
-    "Supplier": "HP",
-    "Quantity": 30,
-    "Price": "$40",
-    "Track": "Track Link 6"
-  },
-  {
-    "ShipmentID": "S007",
-    "ShipperName": "Fast Logistics",
-    "PhoneNumber": "1234567890",
-    "Status": "Pending",
-    "Product": "Printer",
-    "Supplier": "Canon",
-    "Quantity": 8,
-    "Price": "$200",
-    "Track": "Track Link 7"
-  },
-  {
-    "ShipmentID": "S008",
-    "ShipperName": "Speedy Delivery",
-    "PhoneNumber": "0987654321",
-    "Status": "Cancelled",
-    "Product": "Tablet",
-    "Supplier": "Apple",
-    "Quantity": 12,
-    "Price": "$600",
-    "Track": "Track Link 8"
-  },
-  {
-    "ShipmentID": "S009",
-    "ShipperName": "Express Couriers",
-    "PhoneNumber": "444555666",
-    "Status": "In Transit",
-    "Product": "Camera",
-    "Supplier": "Nikon",
-    "Quantity": 7,
-    "Price": "$500",
-    "Track": "Track Link 9"
-  },
-  {
-    "ShipmentID": "S010",
-    "ShipperName": "Fast Logistics",
-    "PhoneNumber": "1234567890",
-    "Status": "Delivered",
-    "Product": "Smartwatch",
-    "Supplier": "Fitbit",
-    "Quantity": 18,
-    "Price": "$250",
-    "Track": "Track Link 10"
+  .tabs span {
+    cursor: pointer;
+    padding: 10px;
   }
-]
+  
+  .tabs span.active {
+    border-bottom: 2px solid blue;
+    font-weight: bold;
+  }
+  
+  form {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  label {
+    font-weight: bold;
+    margin-top: 10px;
+  }
+  
+  input,
+  select {
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .priority input {
+    margin-right: 5px;
+  }
+  
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+  }
+  
+  button {
+    padding: 10px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  button.create {
+    background: blue;
+    color: white;
+  }
+  
+  button.cancel {
+    background: gray;
+    color: white;
+  }
+  
