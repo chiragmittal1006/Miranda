@@ -1,0 +1,277 @@
+import { Component, Input, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
+import { MatTableDataSource } from '@angular/material/table';
+import { MatPaginator } from '@angular/material/paginator';
+
+@Component({
+  selector: 'app-table',
+  templateUrl: './table.component.html',
+  styleUrls: ['./table.component.css']
+})
+export class TableComponent implements OnChanges, AfterViewInit {
+  @Input() headers: string[];
+  @Input() rows: any[] = [];
+  // A string to filter the table data. For example "In Transit" filter will show only rows where any cell contains that string.
+  @Input() filter: string = '';
+
+  dataSource = new MatTableDataSource<any>();
+
+  @ViewChild(MatPaginator) paginator: MatPaginator;
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.rows) {
+      this.dataSource.data = this.rows || [];
+    }
+    if (changes.filter) {
+      this.applyFilter();
+    }
+    if (this.headers) {
+      // Set displayedColumns from headers.
+      this.dataSource.paginator = this.paginator;
+    }
+  }
+
+  ngAfterViewInit(): void {
+    this.dataSource.paginator = this.paginator;
+    // Use a custom filter predicate that searches through all row property values.
+    this.dataSource.filterPredicate = (data: any, filter: string): boolean => {
+      const accumulator = (currentTerm, key) => {
+        return currentTerm + (data[key] ? data[key].toString().toLowerCase() : '');
+      };
+      const dataStr = this.headers.reduce(accumulator, '');
+      return dataStr.indexOf(filter.trim().toLowerCase()) !== -1;
+    };
+    this.applyFilter();
+  }
+
+  applyFilter(): void {
+    this.dataSource.filter = this.filter;
+    if (this.dataSource.paginator) {
+      this.dataSource.paginator.firstPage();
+    }
+  }
+}
+
+<!-- shared/table/table.component.html -->
+<div class="table-container">
+    <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">
+  
+      <!-- Dynamically generate column definitions -->
+      <ng-container *ngFor="let column of headers" [matColumnDef]="column">
+        <th mat-header-cell *matHeaderCellDef> {{ column }} </th>
+        <td mat-cell *matCellDef="let element"> {{ element[column] }} </td>
+      </ng-container>
+  
+      <tr mat-header-row *matHeaderRowDef="headers"></tr>
+      <tr mat-row *matRowDef="let row; columns: headers;"></tr>
+    </table>
+    <mat-paginator [pageSize]="10" showFirstLastButtons></mat-paginator>
+  </div>
+
+  <!-- service -->
+  import { Injectable } from '@angular/core';
+  import { HttpClient } from '@angular/common/http';
+  import { Observable } from 'rxjs';
+  
+  @Injectable({
+    providedIn: 'root'
+  })
+  export class DataService {
+    private dbUrl = 'assets/db.json';
+  
+    constructor(private http: HttpClient) { }
+  
+    // Adjust this method according to your JSON structure.
+    getTableData(): Observable<any[]> {
+      return this.http.get<any[]>(this.dbUrl);
+    }
+  }
+  
+
+  <!-- stock-management.component.ts -->
+
+  import { Component, OnInit } from '@angular/core';
+import { DataService } from '../data.service';
+import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { TableComponent } from '../shared/table/table.component';
+
+@Component({
+  selector: 'app-stock-management',
+  templateUrl: './stock-management.component.html',
+  styleUrls: ['./stock-management.component.css'],
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, MatFormFieldModule, MatSelectModule, TableComponent]
+})
+export class StockManagementComponent implements OnInit {
+  filterOptions: string[] = ['All', 'In Transit', 'Delivered', 'Pending', 'Cancelled'];
+  selectedFilter: string = 'All';
+  // Define headers matching the keys of each row object.
+  tableHeaders: string[] = ['ShipmentID', 'ShipperName', 'PhoneNumber', 'Status', 'Product', 'Supplier', 'Quantity', 'Price', 'Track'];
+  tableRows: any[] = [];
+  // This filter string is passed to the shared table component.
+  filterValue: string = '';
+
+  constructor(private dataService: DataService) { }
+
+  ngOnInit(): void {
+    this.loadTableData();
+  }
+
+  loadTableData(): void {
+    this.dataService.getTableData().subscribe(data => {
+      // Assuming that the db.json returns an array of rows.
+      this.tableRows = data;
+    });
+  }
+
+  onFilterChange(newFilter: string): void {
+    this.selectedFilter = newFilter;
+    // If "All" is selected, clear the filter; otherwise use the filter text.
+    this.filterValue = newFilter === 'All' ? '' : newFilter.toLowerCase();
+  }
+}
+
+<!-- stock-management.component.html -->
+<div class="stock-management">
+    <h1>Stock Management</h1>
+    <mat-form-field appearance="fill">
+      <mat-label>Filter by Status</mat-label>
+      <mat-select [(value)]="selectedFilter" (selectionChange)="onFilterChange($event.value)">
+        <mat-option *ngFor="let option of filterOptions" [value]="option">
+          {{ option }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  
+    <!-- The shared table component is used here -->
+    <app-table [headers]="tableHeaders" [rows]="tableRows" [filter]="filterValue"></app-table>
+  </div>
+
+  <!-- stock-management.component.css -->
+  
+  .stock-management {
+    padding: 20px;
+  }
+  
+  mat-form-field {
+    width: 300px;
+    margin-bottom: 20px;
+  }
+  
+
+  <!-- db.json -->
+
+  [
+  {
+    "ShipmentID": "S001",
+    "ShipperName": "Fast Logistics",
+    "PhoneNumber": "1234567890",
+    "Status": "In Transit",
+    "Product": "Laptop",
+    "Supplier": "Dell",
+    "Quantity": 10,
+    "Price": "$1000",
+    "Track": "Track Link 1"
+  },
+  {
+    "ShipmentID": "S002",
+    "ShipperName": "Speedy Delivery",
+    "PhoneNumber": "0987654321",
+    "Status": "Delivered",
+    "Product": "Smartphone",
+    "Supplier": "Samsung",
+    "Quantity": 20,
+    "Price": "$800",
+    "Track": "Track Link 2"
+  },
+  {
+    "ShipmentID": "S003",
+    "ShipperName": "Express Couriers",
+    "PhoneNumber": "444555666",
+    "Status": "Pending",
+    "Product": "Headphones",
+    "Supplier": "Sony",
+    "Quantity": 15,
+    "Price": "$150",
+    "Track": "Track Link 3"
+  },
+  {
+    "ShipmentID": "S004",
+    "ShipperName": "Fast Logistics",
+    "PhoneNumber": "1234567890",
+    "Status": "Cancelled",
+    "Product": "Monitor",
+    "Supplier": "LG",
+    "Quantity": 5,
+    "Price": "$300",
+    "Track": "Track Link 4"
+  },
+  {
+    "ShipmentID": "S005",
+    "ShipperName": "Speedy Delivery",
+    "PhoneNumber": "0987654321",
+    "Status": "In Transit",
+    "Product": "Keyboard",
+    "Supplier": "Logitech",
+    "Quantity": 25,
+    "Price": "$50",
+    "Track": "Track Link 5"
+  },
+  {
+    "ShipmentID": "S006",
+    "ShipperName": "Express Couriers",
+    "PhoneNumber": "444555666",
+    "Status": "Delivered",
+    "Product": "Mouse",
+    "Supplier": "HP",
+    "Quantity": 30,
+    "Price": "$40",
+    "Track": "Track Link 6"
+  },
+  {
+    "ShipmentID": "S007",
+    "ShipperName": "Fast Logistics",
+    "PhoneNumber": "1234567890",
+    "Status": "Pending",
+    "Product": "Printer",
+    "Supplier": "Canon",
+    "Quantity": 8,
+    "Price": "$200",
+    "Track": "Track Link 7"
+  },
+  {
+    "ShipmentID": "S008",
+    "ShipperName": "Speedy Delivery",
+    "PhoneNumber": "0987654321",
+    "Status": "Cancelled",
+    "Product": "Tablet",
+    "Supplier": "Apple",
+    "Quantity": 12,
+    "Price": "$600",
+    "Track": "Track Link 8"
+  },
+  {
+    "ShipmentID": "S009",
+    "ShipperName": "Express Couriers",
+    "PhoneNumber": "444555666",
+    "Status": "In Transit",
+    "Product": "Camera",
+    "Supplier": "Nikon",
+    "Quantity": 7,
+    "Price": "$500",
+    "Track": "Track Link 9"
+  },
+  {
+    "ShipmentID": "S010",
+    "ShipperName": "Fast Logistics",
+    "PhoneNumber": "1234567890",
+    "Status": "Delivered",
+    "Product": "Smartwatch",
+    "Supplier": "Fitbit",
+    "Quantity": 18,
+    "Price": "$250",
+    "Track": "Track Link 10"
+  }
+]
