@@ -1,0 +1,171 @@
+import os
+import psycopg2
+from langchain.chat_models import ChatGroq
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores.pgvector import PGVector
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import PyPDFLoader
+from langgraph.graph import StateGraph, END
+from pydantic import BaseModel
+from typing import Optional
+from tavily import TavilyClient
+
+# ==============================
+# Configuration & Setup
+# ==============================
+# Load environment variables
+PGVECTOR_CONNECTION_STRING = os.getenv("PGVECTOR_CONNECTION_STRING")  # PostgreSQL connection
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+
+# Initialize LLM (Groq)
+llm = ChatGroq(api_key=GROQ_API_KEY, model="mixtral")
+
+# Initialize Tavily API Client for Search
+tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+
+# ==============================
+# Document Embedding (RAG Setup)
+# ==============================
+def embed_documents():
+    """Load, chunk, and store PDF embeddings in pgVector."""
+    loader = PyPDFLoader("Employee_Handbook.pdf")
+    documents = loader.load()
+    
+    # Chunking documents
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = text_splitter.split_documents(documents)
+
+    # Load embeddings
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Store embeddings in pgVector
+    vector_store = PGVector.from_documents(
+        documents=chunks, 
+        embedding=embedding_model,
+        connection_string=PGVECTOR_CONNECTION_STRING,
+        table_name="rag_embeddings"
+    )
+    print("Documents embedded successfully!")
+
+
+# ==============================
+# RAG Agent (Knowledge Retrieval)
+# ==============================
+def retrieve_knowledge(query: str):
+    """Retrieve relevant documents from pgVector for the query."""
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Load vector store
+    vector_store = PGVector.from_existing_index(
+        connection_string=PGVECTOR_CONNECTION_STRING,
+        embedding=embedding_model,
+        table_name="rag_embeddings"
+    )
+    
+    # Retrieve top 2 relevant documents
+    docs = vector_store.similarity_search(query, k=2)
+    
+    if docs:
+        return "\n".join([doc.page_content for doc in docs])
+    return "No relevant information found."
+
+
+# ==============================
+# Search Agent (Tavily API)
+# ==============================
+def internet_search(query: str):
+    """Fetch real-time information from the internet using Tavily."""
+    response = tavily_client.search(query=query, search_depth="basic")
+    
+    if response and isinstance(response, dict) and "results" in response:
+        return response["results"][0].get("content", "No relevant content found.")
+    
+    return "No search results found."
+
+
+# ==============================
+# SQL Generator Agent
+# ==============================
+def generate_sql(query: str):
+    """Convert a natural language query into an SQL statement."""
+    prompt = f"""
+    Convert the following natural language question into a valid SQL query for the HashCart database:
+    
+    Question: {query}
+    
+    Schema:
+    Users Table: (id, name, email, created_at)
+    Products Table: (id, name, price, created_at)
+    Orders Table: (id, order_date, total_amount, user_id)
+    
+    Return only the SQL query, nothing else.
+    """
+
+    sql_query = llm.invoke(prompt).content  # Fixed invocation
+    return sql_query
+
+
+# ==============================
+# Router Agent
+# ==============================
+class QueryState(BaseModel):
+    query: str
+    agent: Optional[str] = None
+    response: Optional[str] = None
+
+def query_router(state: QueryState):
+    """Route the query to the correct agent."""
+    query = state.query.lower()
+    
+    if any(keyword in query for keyword in ["document", "handbook", "policy"]):
+        return {"agent": "rag_agent"}
+    
+    elif any(keyword in query for keyword in ["latest news", "current trends", "real-time"]):
+        return {"agent": "search_agent"}
+    
+    elif any(keyword in query for keyword in ["database", "SQL", "query", "retrieve"]):
+        return {"agent": "sql_agent"}
+    
+    else:
+        return {"agent": "search_agent"}  # Default to search
+
+
+# ==============================
+# Define LangGraph Workflow
+# ==============================
+workflow = StateGraph(QueryState)
+
+# Define nodes (agents)
+workflow.add_node("rag_agent", lambda state: {"response": retrieve_knowledge(state.query)})
+workflow.add_node("search_agent", lambda state: {"response": internet_search(state.query)})
+workflow.add_node("sql_agent", lambda state: {"response": generate_sql(state.query)})
+
+# Router Logic
+workflow.add_node("router", query_router)
+workflow.set_entry_point("router")
+
+# Define routing rules
+workflow.add_edge("router", "rag_agent", condition=lambda state: state.agent == "rag_agent")
+workflow.add_edge("router", "search_agent", condition=lambda state: state.agent == "search_agent")
+workflow.add_edge("router", "sql_agent", condition=lambda state: state.agent == "sql_agent")
+workflow.add_edge("rag_agent", END)
+workflow.add_edge("search_agent", END)
+workflow.add_edge("sql_agent", END)
+
+graph_executor = workflow.compile()
+
+
+# ==============================
+# Run Query Routing System
+# ==============================
+if __name__ == "__main__":
+    embed_documents()  # Run this once to store embeddings
+
+    while True:
+        user_query = input("\nEnter your query (or type 'exit' to quit): ")
+        if user_query.lower() == "exit":
+            break
+        
+        result = graph_executor.invoke(QueryState(query=user_query))
+        print("Response:", result["response"])  # Fixed access
