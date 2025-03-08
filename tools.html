@@ -1,20 +1,18 @@
 import os
-import psycopg2
-from langchain.chat_models import ChatGroq
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores.pgvector import PGVector
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader
-from langgraph.graph import StateGraph, END
-from pydantic import BaseModel
-from typing import Optional
-from tavily import TavilyClient
+from langchain.chat_models import ChatGroq  # LLM from Groq
+from langchain.embeddings import HuggingFaceEmbeddings  # Embeddings
+from langchain.vectorstores import Chroma  # ChromaDB for vector storage
+from langchain.text_splitter import RecursiveCharacterTextSplitter  # Chunking documents
+from langchain.document_loaders import PyPDFLoader  # PDF document loader
+from langgraph.graph import StateGraph, END  # LangGraph for workflow automation
+from pydantic import BaseModel  # Data validation and model definition
+from typing import Optional  # Type hinting for optional parameters
+from tavily import TavilyClient  # API client for real-time web search
 
 # ==============================
 # Configuration & Setup
 # ==============================
 # Load environment variables
-PGVECTOR_CONNECTION_STRING = os.getenv("PGVECTOR_CONNECTION_STRING")  # PostgreSQL connection
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
@@ -28,7 +26,7 @@ tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 # Document Embedding (RAG Setup)
 # ==============================
 def embed_documents():
-    """Load, chunk, and store PDF embeddings in pgVector."""
+    """Load, chunk, and store PDF embeddings in ChromaDB."""
     loader = PyPDFLoader("Employee_Handbook.pdf")
     documents = loader.load()
     
@@ -38,38 +36,32 @@ def embed_documents():
 
     # Load embeddings
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-    # Store embeddings in pgVector
-    vector_store = PGVector.from_documents(
+
+    # Store embeddings in ChromaDB
+    vector_store = Chroma.from_documents(
         documents=chunks, 
         embedding=embedding_model,
-        connection_string=PGVECTOR_CONNECTION_STRING,
-        table_name="rag_embeddings"
+        persist_directory="./chroma_db"  # Directory to persist the database
     )
+    
     print("Documents embedded successfully!")
-
 
 # ==============================
 # RAG Agent (Knowledge Retrieval)
 # ==============================
 def retrieve_knowledge(query: str):
-    """Retrieve relevant documents from pgVector for the query."""
+    """Retrieve relevant documents from ChromaDB for the query."""
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-    # Load vector store
-    vector_store = PGVector.from_existing_index(
-        connection_string=PGVECTOR_CONNECTION_STRING,
-        embedding=embedding_model,
-        table_name="rag_embeddings"
-    )
-    
+
+    # Load ChromaDB
+    vector_store = Chroma(persist_directory="./chroma_db", embedding_function=embedding_model)
+
     # Retrieve top 2 relevant documents
     docs = vector_store.similarity_search(query, k=2)
     
     if docs:
         return "\n".join([doc.page_content for doc in docs])
     return "No relevant information found."
-
 
 # ==============================
 # Search Agent (Tavily API)
@@ -82,7 +74,6 @@ def internet_search(query: str):
         return response["results"][0].get("content", "No relevant content found.")
     
     return "No search results found."
-
 
 # ==============================
 # SQL Generator Agent
@@ -102,9 +93,8 @@ def generate_sql(query: str):
     Return only the SQL query, nothing else.
     """
 
-    sql_query = llm.invoke(prompt).content  # Fixed invocation
+    sql_query = llm.invoke(prompt).content  # Generate SQL query
     return sql_query
-
 
 # ==============================
 # Router Agent
@@ -130,7 +120,6 @@ def query_router(state: QueryState):
     else:
         return {"agent": "search_agent"}  # Default to search
 
-
 # ==============================
 # Define LangGraph Workflow
 # ==============================
@@ -155,7 +144,6 @@ workflow.add_edge("sql_agent", END)
 
 graph_executor = workflow.compile()
 
-
 # ==============================
 # Run Query Routing System
 # ==============================
@@ -168,4 +156,8 @@ if __name__ == "__main__":
             break
         
         result = graph_executor.invoke(QueryState(query=user_query))
-        print("Response:", result["response"])  # Fixed access
+        print("Response:", result["response"])
+
+
+
+<!-- pip install langchain langgraph chromadb tavily pydantic psycopg2 -->
