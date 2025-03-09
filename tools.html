@@ -1,17 +1,19 @@
 import os
-from langchain.chat_models import ChatGroq  # LLM from Groq
-from langchain.embeddings import HuggingFaceEmbeddings  # Embeddings
-from langchain.vectorstores import Chroma  # ChromaDB for vector storage
-from langchain.text_splitter import RecursiveCharacterTextSplitter  # Chunking documents
-from langchain.document_loaders import PyPDFLoader  # PDF document loader
-from langgraph.graph import StateGraph, END  # LangGraph for workflow automation
-from pydantic import BaseModel  # Data validation and model definition
-from typing import Optional  # Type hinting for optional parameters
-from tavily import TavilyClient  # API client for real-time web search
+import logging
+from langchain.chat_models import ChatGroq
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import PyPDFLoader
+from langgraph.graph import StateGraph, END
+from pydantic import BaseModel
+from typing import Optional, Dict, List
+from tavily import TavilyClient
 
 # ==============================
 # Configuration & Setup
 # ==============================
+
 # Load environment variables
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
@@ -19,125 +21,148 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 # Initialize LLM (Groq)
 llm = ChatGroq(api_key=GROQ_API_KEY, model="mixtral")
 
-# Initialize Tavily API Client for Search
+# Initialize Tavily API Client for Web Search
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ==============================
 # Document Embedding (RAG Setup)
 # ==============================
+
 def embed_documents():
     """Load, chunk, and store PDF embeddings in ChromaDB."""
-    loader = PyPDFLoader("Employee_Handbook.pdf")
-    documents = loader.load()
-    
-    # Chunking documents
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = text_splitter.split_documents(documents)
+    try:
+        loader = PyPDFLoader("Employee_Handbook.pdf")
+        documents = loader.load()
 
-    # Load embeddings
-    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        chunks = text_splitter.split_documents(documents)
 
-    # Store embeddings in ChromaDB
-    vector_store = Chroma.from_documents(
-        documents=chunks, 
-        embedding=embedding_model,
-        persist_directory="./chroma_db"  # Directory to persist the database
-    )
+        embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+        vector_store = Chroma.from_documents(
+            documents=chunks, 
+            embedding=embedding_model,
+            persist_directory="./chroma_db"
+        )
+
+        logging.info("Documents embedded successfully!")
     
-    print("Documents embedded successfully!")
+    except Exception as e:
+        logging.error(f"Error in embedding documents: {e}")
 
 # ==============================
 # RAG Agent (Knowledge Retrieval)
 # ==============================
-def retrieve_knowledge(query: str):
-    """Retrieve relevant documents from ChromaDB for the query."""
-    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    # Load ChromaDB
-    vector_store = Chroma(persist_directory="./chroma_db", embedding_function=embedding_model)
+def retrieve_knowledge(state):
+    """Retrieve relevant documents from ChromaDB or fall back to web search."""
+    try:
+        embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vector_store = Chroma(persist_directory="./chroma_db", embedding_function=embedding_model)
 
-    # Retrieve top 2 relevant documents
-    docs = vector_store.similarity_search(query, k=2)
+        docs = vector_store.similarity_search(state.query, k=2)
+
+        if docs:
+            return {"response": "\n".join([doc.page_content for doc in docs])}
+
+        logging.warning("No relevant documents found in RAG. Falling back to web search.")
+        return internet_search(state)  # Fallback to web search
     
-    if docs:
-        return "\n".join([doc.page_content for doc in docs])
-    return "No relevant information found."
+    except Exception as e:
+        logging.error(f"RAG retrieval failed: {e}. Using fallback.")
+        return internet_search(state)
 
 # ==============================
 # Search Agent (Tavily API)
 # ==============================
-def internet_search(query: str):
+
+def internet_search(state):
     """Fetch real-time information from the internet using Tavily."""
-    response = tavily_client.search(query=query, search_depth="basic")
+    try:
+        response = tavily_client.search(query=state.query, search_depth="basic")
+
+        if response and "results" in response:
+            return {"response": response["results"][0].get("content", "No relevant content found.")}
+
+        return {"response": "No search results found."}
     
-    if response and isinstance(response, dict) and "results" in response:
-        return response["results"][0].get("content", "No relevant content found.")
-    
-    return "No search results found."
+    except Exception as e:
+        logging.error(f"Web search failed: {e}. Returning default response.")
+        return {"response": "Unable to fetch results. Please try again later."}
 
 # ==============================
 # SQL Generator Agent
 # ==============================
-def generate_sql(query: str):
-    """Convert a natural language query into an SQL statement."""
-    prompt = f"""
-    Convert the following natural language question into a valid SQL query for the HashCart database:
-    
-    Question: {query}
-    
-    Schema:
-    Users Table: (id, name, email, created_at)
-    Products Table: (id, name, price, created_at)
-    Orders Table: (id, order_date, total_amount, user_id)
-    
-    Return only the SQL query, nothing else.
-    """
 
-    sql_query = llm.invoke(prompt).content  # Generate SQL query
-    return sql_query
+def generate_sql(state):
+    """Convert a natural language query into an SQL statement."""
+    try:
+        prompt = f"""
+        Convert the following natural language question into a valid SQL query:
+
+        Question: {state.query}
+        
+        Schema:
+        Users Table: (id, name, email, created_at)
+        Products Table: (id, name, price, created_at)
+        Orders Table: (id, order_date, total_amount, user_id)
+
+        Return only the SQL query, nothing else.
+        """
+
+        sql_query = llm.invoke(prompt).content
+        return {"response": sql_query}
+
+    except Exception as e:
+        logging.error(f"SQL generation failed: {e}")
+        return {"response": "Unable to generate SQL. Please check your query and try again."}
 
 # ==============================
 # Router Agent
 # ==============================
+
 class QueryState(BaseModel):
     query: str
     agent: Optional[str] = None
     response: Optional[str] = None
+    memory: Optional[List[Dict[str, str]]] = []  # Session-based memory
 
 def query_router(state: QueryState):
-    """Route the query to the correct agent."""
+    """Route the query to the correct agent while maintaining session memory."""
     query = state.query.lower()
-    
+
     if any(keyword in query for keyword in ["document", "handbook", "policy"]):
-        return {"agent": "rag_agent"}
-    
+        agent = "rag_agent"
     elif any(keyword in query for keyword in ["latest news", "current trends", "real-time"]):
-        return {"agent": "search_agent"}
-    
+        agent = "search_agent"
     elif any(keyword in query for keyword in ["database", "SQL", "query", "retrieve"]):
-        return {"agent": "sql_agent"}
-    
+        agent = "sql_agent"
     else:
-        return {"agent": "search_agent"}  # Default to search
+        agent = "search_agent"  # Default to web search
+    
+    logging.info(f"Query routed to: {agent}")
+    return {"agent": agent}
 
 # ==============================
 # Define LangGraph Workflow
 # ==============================
+
 workflow = StateGraph(QueryState)
 
 # Define nodes (agents)
-workflow.add_node("rag_agent", lambda state: {"response": retrieve_knowledge(state.query)})
-workflow.add_node("search_agent", lambda state: {"response": internet_search(state.query)})
-workflow.add_node("sql_agent", lambda state: {"response": generate_sql(state.query)})
+workflow.add_node("rag_agent", retrieve_knowledge)
+workflow.add_node("search_agent", internet_search)
+workflow.add_node("sql_agent", generate_sql)
 
 # Router Logic
 workflow.add_node("router", query_router)
 workflow.set_entry_point("router")
 
-# Define routing rules
-workflow.add_edge("router", "rag_agent", condition=lambda state: state.agent == "rag_agent")
-workflow.add_edge("router", "search_agent", condition=lambda state: state.agent == "search_agent")
-workflow.add_edge("router", "sql_agent", condition=lambda state: state.agent == "sql_agent")
+# Directly route based on `state.agent`
+workflow.add_edge("router", lambda state: state.agent)
 workflow.add_edge("rag_agent", END)
 workflow.add_edge("search_agent", END)
 workflow.add_edge("sql_agent", END)
@@ -147,17 +172,22 @@ graph_executor = workflow.compile()
 # ==============================
 # Run Query Routing System
 # ==============================
+
 if __name__ == "__main__":
     embed_documents()  # Run this once to store embeddings
+
+    session_memory = []  # Stores past queries & responses
 
     while True:
         user_query = input("\nEnter your query (or type 'exit' to quit): ")
         if user_query.lower() == "exit":
             break
-        
-        result = graph_executor.invoke(QueryState(query=user_query))
+
+        # Maintain session memory
+        query_state = QueryState(query=user_query, memory=session_memory)
+        result = graph_executor.invoke(query_state)
+
+        # Store memory
+        session_memory.append({"query": user_query, "response": result["response"]})
+
         print("Response:", result["response"])
-
-
-
-<!-- pip install langchain langgraph chromadb tavily pydantic psycopg2 -->
