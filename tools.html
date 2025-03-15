@@ -1,193 +1,497 @@
-import os
-import logging
-from langchain.chat_models import ChatGroq
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader
-from langgraph.graph import StateGraph, END
-from pydantic import BaseModel
-from typing import Optional, Dict, List
-from tavily import TavilyClient
+BloggingApp/
+│
+├── Controllers/
+│   ├── BlogController.cs
+│   └── AuthController.cs
+│
+├── Models/
+│   ├── User.cs
+│   ├── BlogPost.cs
+│   └── Comment.cs
+│
+├── Services/
+│   ├── AuthorizationService.cs
+│   └── UserManager.cs
+│
+├── Data/
+│   └── BloggingContext.cs
+│
+├── Program.cs
+├── appsettings.json
+└── Startup.cs (optional, if you want to separate configuration)
 
-# ==============================
-# Configuration & Setup
-# ==============================
 
-# Load environment variables
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+// user Models
 
-# Initialize LLM (Groq)
-llm = ChatGroq(api_key=GROQ_API_KEY, model="mixtral")
+using System;
 
-# Initialize Tavily API Client for Web Search
-tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+public enum UserRole
+{
+    Subscriber = 1,
+    Blogger = 2,
+    Admin = 3
+}
 
-# Setup Logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+public class User
+{
+    public int Id { get; set; }
+    public string Username { get; set; }
+    public string Email { get; set; }
+    public string PasswordHash { get; set; }
+    public UserRole Role { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
 
-# ==============================
-# Document Embedding (RAG Setup)
-# ==============================
 
-def embed_documents():
-    """Load, chunk, and store PDF embeddings in ChromaDB."""
-    try:
-        loader = PyPDFLoader("Employee_Handbook.pdf")
-        documents = loader.load()
+// blog Models
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        chunks = text_splitter.split_documents(documents)
+using System;
 
-        embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+public class BlogPost
+{
+    public int Id { get; set; }
+    public string Title { get; set; }
+    public string Content { get; set; }
+    public int AuthorId { get; set; }
+    public User Author { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
 
-        vector_store = Chroma.from_documents(
-            documents=chunks, 
-            embedding=embedding_model,
-            persist_directory="./chroma_db"
-        )
 
-        logging.info("Documents embedded successfully!")
-    
-    except Exception as e:
-        logging.error(f"Error in embedding documents: {e}")
+// comments Models
 
-# ==============================
-# RAG Agent (Knowledge Retrieval)
-# ==============================
+using System;
 
-def retrieve_knowledge(state):
-    """Retrieve relevant documents from ChromaDB or fall back to web search."""
-    try:
-        embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vector_store = Chroma(persist_directory="./chroma_db", embedding_function=embedding_model)
+public class Comment
+{
+    public int Id { get; set; }
+    public string Content { get; set; }
+    public int UserId { get; set; }
+    public User User { get; set; }
+    public int BlogPostId { get; set; }
+    public BlogPost BlogPost { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
 
-        docs = vector_store.similarity_search(state.query, k=2)
 
-        if docs:
-            return {"response": "\n".join([doc.page_content for doc in docs])}
 
-        logging.warning("No relevant documents found in RAG. Falling back to web search.")
-        return internet_search(state)  # Fallback to web search
-    
-    except Exception as e:
-        logging.error(f"RAG retrieval failed: {e}. Using fallback.")
-        return internet_search(state)
+// Data -> BloggingContext
 
-# ==============================
-# Search Agent (Tavily API)
-# ==============================
 
-def internet_search(state):
-    """Fetch real-time information from the internet using Tavily."""
-    try:
-        response = tavily_client.search(query=state.query, search_depth="basic")
+using Microsoft.EntityFrameworkCore;
 
-        if response and "results" in response:
-            return {"response": response["results"][0].get("content", "No relevant content found.")}
+public class BloggingContext : DbContext
+{
+    public BloggingContext(DbContextOptions<BloggingContext> options) : base(options)
+    {
+    }
 
-        return {"response": "No search results found."}
-    
-    except Exception as e:
-        logging.error(f"Web search failed: {e}. Returning default response.")
-        return {"response": "Unable to fetch results. Please try again later."}
+    public DbSet<User> Users { get; set; }
+    public DbSet<BlogPost> BlogPosts { get; set; }
+    public DbSet<Comment> Comments { get; set; }
 
-# ==============================
-# SQL Generator Agent
-# ==============================
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<User>().HasKey(u => u.Id);
+        modelBuilder.Entity<User>().Property(u => u.Username).IsRequired().HasMaxLength(50);
+        modelBuilder.Entity<User>().Property(u => u.Email).IsRequired().HasMaxLength(100);
+        modelBuilder.Entity<User>().Property(u => u.PasswordHash).IsRequired();
 
-def generate_sql(state):
-    """Convert a natural language query into an SQL statement."""
-    try:
-        prompt = f"""
-        Convert the following natural language question into a valid SQL query:
+        modelBuilder.Entity<BlogPost>().HasKey(bp => bp.Id);
+        modelBuilder.Entity<BlogPost>().Property(bp => bp.Title).IsRequired().HasMaxLength(200);
+        modelBuilder.Entity<BlogPost>().Property(bp => bp.Content).IsRequired();
+        modelBuilder.Entity<BlogPost>().HasOne(bp => bp.Author).WithMany().HasForeignKey(bp => bp.AuthorId).OnDelete(DeleteBehavior.Cascade);
 
-        Question: {state.query}
-        
-        Schema:
-        Users Table: (id, name, email, created_at)
-        Products Table: (id, name, price, created_at)
-        Orders Table: (id, order_date, total_amount, user_id)
+        modelBuilder.Entity<Comment>().HasKey(c => c.Id);
+        modelBuilder.Entity<Comment>().Property(c => c.Content).IsRequired();
+        modelBuilder.Entity<Comment>().HasOne(c => c.User).WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Comment>().HasOne(c => c.BlogPost).WithMany().HasForeignKey(c => c.BlogPostId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
 
-        Return only the SQL query, nothing else.
-        """
 
-        sql_query = llm.invoke(prompt).content
-        return {"response": sql_query}
 
-    except Exception as e:
-        logging.error(f"SQL generation failed: {e}")
-        return {"response": "Unable to generate SQL. Please check your query and try again."}
+// authorization Services
 
-# ==============================
-# Router Agent
-# ==============================
 
-class QueryState(BaseModel):
-    query: str
-    agent: Optional[str] = None
-    response: Optional[str] = None
-    memory: Optional[List[Dict[str, str]]] = []  # Session-based memory
+public class AuthorizationService
+{
+    public bool CanCreateBlogPost(User user) => user.Role == UserRole.Blogger || user.Role == UserRole.Admin;
 
-def query_router(state: QueryState):
-    """Route the query to the correct agent while maintaining session memory."""
-    query = state.query.lower()
+    public bool CanEditBlogPost(User user, BlogPost post) => (user.Role == UserRole.Blogger && post.AuthorId == user.Id) || user.Role == UserRole.Admin;
 
-    if any(keyword in query for keyword in ["document", "handbook", "policy"]):
-        agent = "rag_agent"
-    elif any(keyword in query for keyword in ["latest news", "current trends", "real-time"]):
-        agent = "search_agent"
-    elif any(keyword in query for keyword in ["database", "SQL", "query", "retrieve"]):
-        agent = "sql_agent"
-    else:
-        agent = "search_agent"  # Default to web search
-    
-    logging.info(f"Query routed to: {agent}")
-    return {"agent": agent}
+    public bool CanDeleteBlogPost(User user, BlogPost post) => (user.Role == UserRole.Blogger && post.AuthorId == user.Id) || user.Role == UserRole.Admin;
 
-# ==============================
-# Define LangGraph Workflow
-# ==============================
+    public bool CanCommentOnBlogPost(User user) => user.Role != UserRole.Admin;
 
-workflow = StateGraph(QueryState)
+    public bool CanEditComment(User user, Comment comment) => comment.UserId == user.Id;
 
-# Define nodes (agents)
-workflow.add_node("rag_agent", retrieve_knowledge)
-workflow.add_node("search_agent", internet_search)
-workflow.add_node("sql_agent", generate_sql)
+    public bool CanDeleteComment(User user, Comment comment) => comment.UserId == user.Id || user.Role == UserRole.Admin;
+}
 
-# Router Logic
-workflow.add_node("router", query_router)
-workflow.set_entry_point("router")
 
-# Directly route based on `state.agent`
-workflow.add_edge("router", lambda state: state.agent)
-workflow.add_edge("rag_agent", END)
-workflow.add_edge("search_agent", END)
-workflow.add_edge("sql_agent", END)
+// UserManager Services
 
-graph_executor = workflow.compile()
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-# ==============================
-# Run Query Routing System
-# ==============================
+public class UserManager
+{
+    private readonly List<User> _users = new List<User>();
 
-if __name__ == "__main__":
-    embed_documents()  # Run this once to store embeddings
+    public async Task CreateUserAsync(User user)
+    {
+        await Task.Run(() => _users.Add(user));
+    }
 
-    session_memory = []  # Stores past queries & responses
+    public async Task<User> FindUserByCredentialsAsync(string username, string password)
+    {
+        return await Task.Run(() => _users.FirstOrDefault(u => u.Username == username && u.PasswordHash == HashPassword(password)));
+    }
 
-    while True:
-        user_query = input("\nEnter your query (or type 'exit' to quit): ")
-        if user_query.lower() == "exit":
-            break
+    public async Task<User> GetUserByIdAsync(int userId)
+    {
+        return await Task.Run(() => _users.FirstOrDefault(u => u.Id == userId));
+    }
 
-        # Maintain session memory
-        query_state = QueryState(query=user_query, memory=session_memory)
-        result = graph_executor.invoke(query_state)
+    public async Task UpdateUserAsync(User user)
+    {
+        await Task.Run(() =>
+        {
+            var existingUser = _users.FirstOrDefault(u => u.Id == user.Id);
+            if (existingUser != null)
+            {
+                existingUser.Role = user.Role;
+            }
+        });
+    }
 
-        # Store memory
-        session_memory.append({"query": user_query, "response": result["response"]})
+    private string HashPassword(string password)
+    {
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(password));
+    }
+}
 
-        print("Response:", result["response"])
+
+//  auth controller 
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Threading.Tasks;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly UserManager _userManager;
+    private readonly string _jwtSecret;
+
+    public AuthController(UserManager userManager, IConfiguration configuration)
+    {
+        _userManager = userManager;
+        _jwtSecret = configuration["Jwt:Key"];
+    }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] User user)
+    {
+        user.CreatedAt = DateTime.UtcNow;
+        user.PasswordHash = HashPassword(user.PasswordHash); // Hash the password
+        await _userManager.CreateUserAsync(user);
+        return CreatedAtAction(nameof(Login), new { id = user.Id }, user);
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] User loginUser)
+    {
+        var user = await _userManager.FindUserByCredentialsAsync(loginUser.Username, loginUser.PasswordHash);
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var token = GenerateJwtToken(user);
+        return Ok(new { Token = token });
+    }
+
+    private string GenerateJwtToken(User user)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Role, user.Role.ToString())
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: null,
+            audience: null,
+            claims: claims,
+            expires: DateTime.Now.AddMinutes(30),
+            signingCredentials: creds);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string HashPassword(string password)
+    {
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(password));
+    }
+}
+
+
+//  blog controllers 
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
+
+[ApiController]
+[Route("api/[controller]")]
+public class BlogController : ControllerBase
+{
+    private readonly AuthorizationService _authService;
+    private readonly UserManager _userManager;
+    private readonly BloggingContext _context;
+
+    public BlogController(AuthorizationService authService, UserManager userManager, BloggingContext context)
+    {
+        _authService = authService;
+        _userManager = userManager;
+        _context = context;
+    }
+
+    [HttpPost("posts")]
+    [Authorize(Roles = "Blogger,Admin")]
+    public async Task<IActionResult> CreatePost([FromBody] BlogPost post)
+    {
+        var user = await _userManager.GetUserByIdAsync(post.AuthorId);
+        if (!_authService.CanCreateBlogPost(user))
+        {
+            return Forbid();
+        }
+
+        post.CreatedAt = DateTime.UtcNow;
+        await _context.BlogPosts.AddAsync(post);
+        await _context.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetPost), new { id = post.Id }, post);
+    }
+
+    [HttpPut("posts/{id}")]
+    [Authorize(Roles = "Blogger,Admin")]
+    public async Task<IActionResult> UpdatePost(int id, [FromBody] BlogPost updatedPost)
+    {
+        var post = await _context.BlogPosts.FindAsync(id);
+        if (post == null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserByIdAsync(updatedPost.AuthorId);
+        if (!_authService.CanEditBlogPost(user, post))
+        {
+            return Forbid();
+        }
+
+        post.Title = updatedPost.Title;
+        post.Content = updatedPost.Content;
+        post.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("posts/{id}")]
+    [Authorize(Roles = "Blogger,Admin")]
+    public async Task<IActionResult> DeletePost(int id)
+    {
+        var post = await _context.BlogPosts.FindAsync(id);
+        if (post == null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserByIdAsync(post.AuthorId);
+        if (!_authService.CanDeleteBlogPost(user, post))
+        {
+            return Forbid();
+        }
+
+        _context.BlogPosts.Remove(post);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("posts/{postId}/comments")]
+    [Authorize(Roles = "Subscriber,Blogger,Admin")]
+    public async Task<IActionResult> AddComment(int postId, [FromBody] Comment comment)
+    {
+        var post = await _context.BlogPosts.FindAsync(postId);
+        if (post == null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserByIdAsync(comment.UserId);
+        if (!_authService.CanCommentOnBlogPost(user))
+        {
+            return Forbid();
+        }
+
+        comment.CreatedAt = DateTime.UtcNow;
+        comment.BlogPostId = postId;
+        await _context.Comments.AddAsync(comment);
+        await _context.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetComment), new { id = comment.Id }, comment);
+    }
+
+    [HttpPut("comments/{id}")]
+    [Authorize(Roles = "Subscriber,Blogger,Admin")]
+    public async Task<IActionResult> UpdateComment(int id, [FromBody] Comment updatedComment)
+    {
+        var comment = await _context.Comments.FindAsync(id);
+        if (comment == null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserByIdAsync(updatedComment.UserId);
+        if (!_authService.CanEditComment(user, comment))
+        {
+            return Forbid();
+        }
+
+        comment.Content = updatedComment.Content;
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("comments/{id}")]
+    [Authorize(Roles = "Subscriber,Blogger,Admin")]
+    public async Task<IActionResult> DeleteComment(int id)
+    {
+        var comment = await _context.Comments.FindAsync(id);
+        if (comment == null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserByIdAsync(comment.UserId);
+        if (!_authService.CanDeleteComment(user, comment))
+        {
+            return Forbid();
+        }
+
+        _context.Comments.Remove(comment);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("posts/{id}")]
+    public async Task<IActionResult> GetPost(int id)
+    {
+        var post = await _context.BlogPosts.FindAsync(id);
+        if (post == null)
+        {
+            return NotFound();
+        }
+        return Ok(post);
+    }
+
+    [HttpGet("comments/{id}")]
+    public async Task<IActionResult> GetComment(int id)
+    {
+        var comment = await _context.Comments.FindAsync(id);
+        if (comment == null)
+        {
+            return NotFound();
+        }
+        return Ok(comment);
+    }
+}
+
+
+
+
+// program.cs file
+
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddDbContext<BloggingContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddControllers();
+builder.Services.AddSingleton<AuthorizationService>();
+builder.Services.AddSingleton<UserManager>();
+
+// Configure JWT authentication
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+});
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+
+
+
+// application.json file
+
+
+
+{
+    "ConnectionStrings": {
+      "DefaultConnection": "Server=your_server;Database=BloggingDb;User Id=your_user;Password=your_password;"
+    },
+    "Jwt": {
+      "Key": "your_jwt_secret_key" // Use a strong secret key
+    },
+    "Logging": {
+      "LogLevel": {
+        "Default": "Information",
+        "Microsoft": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information"
+      }
+    },
+    "AllowedHosts": "*"
+  }
+  
+
+//  migration commands
