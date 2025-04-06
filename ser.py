@@ -159,3 +159,13 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+
+
+# pip install -U google-genai==0.5.0 llama-index==0.12.11 llama-index-llms-gemini==0.4.3 llama-index-embeddings-gemini==0.3.1 websockets pydub
+
+
+# Set API Key: Replace os.environ['GOOGLE_API_KEY'] = '' with your actual Google API key in server.py.
+# Run the Backend: Execute python server.py.
+# Serve the Frontend: Use a simple HTTP server (e.g., python -m http.server) in the directory containing index.html and pcm-processor.js, then open http://localhost:8000 in your browser.
