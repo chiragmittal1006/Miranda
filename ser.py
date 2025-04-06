@@ -169,3 +169,6 @@ if __name__ == "__main__":
 # Set API Key: Replace os.environ['GOOGLE_API_KEY'] = '' with your actual Google API key in server.py.
 # Run the Backend: Execute python server.py.
 # Serve the Frontend: Use a simple HTTP server (e.g., python -m http.server) in the directory containing index.html and pcm-processor.js, then open http://localhost:8000 in your browser.
+
+
+# AIzaSyBMNn6dYVjTIqq9lq4dQwYseUXZrPg4nJ8
