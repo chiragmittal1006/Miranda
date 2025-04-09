@@ -39,10 +39,10 @@ async def gemini_session_handler(client_websocket: websockets.WebSocketServerPro
                         if "realtime_input" in data:
                             for chunk in data["realtime_input"]["media_chunks"]:
                                 if chunk["mime_type"] == "audio/pcm":
-                                    await chat_session.send_message(parts=[{"mime_type": "audio/pcm", "data": base64.b64decode(chunk["data"])}])
+                                    await chat_session.send_message([{"mime_type": "audio/pcm", "data": base64.b64decode(chunk["data"])}])
 
                                 elif chunk["mime_type"] == "image/jpeg":
-                                    await chat_session.send_message(parts=[{"mime_type": "image/jpeg", "data": base64.b64decode(chunk["data"])}])
+                                    await chat_session.send_message([{"mime_type": "image/jpeg", "data": base64.b64decode(chunk["data"])}])
 
                     except Exception as e:
                         print(f"Error sending to Gemini: {e}")
@@ -58,7 +58,7 @@ async def gemini_session_handler(client_websocket: websockets.WebSocketServerPro
                 while True:
                     try:
                         print("receiving from gemini")
-                        response = await chat_session.get_next_response()
+                        response = await chat_session.send_message("") # Trigger a response based on prior context
                         if response and response.parts:
                             for part in response.parts:
                                 if hasattr(part, 'text') and part.text is not None:
@@ -169,13 +169,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-# pip install -U google-genai==0.5.0 llama-index==0.12.11 llama-index-llms-gemini==0.4.3 llama-index-embeddings-gemini==0.3.1 websockets pydub
-
-
-# Set API Key: Replace os.environ['GOOGLE_API_KEY'] = '' with your actual Google API key in server.py.
-# Run the Backend: Execute python server.py.
-# Serve the Frontend: Use a simple HTTP server (e.g., python -m http.server) in the directory containing index.html and pcm-processor.js, then open http://localhost:8000 in your browser.
-
-
-# AIzaSyBMNn6dYVjTIqq9lq4dQwYseUXZrPg4nJ8
