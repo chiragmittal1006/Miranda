@@ -26,79 +26,80 @@ async def gemini_session_handler(client_websocket: websockets.WebSocketServerPro
         # Initialize the Gemini model with the generation_config
         gemini_model = generative_models.GenerativeModel(model_name=MODEL, generation_config=generation_config)
 
-        async with gemini_model.start_chat() as chat_session:
-            print("Connected to Gemini API")
+        chat_session = gemini_model.start_chat()  # Start the chat session
 
-            async def send_to_gemini():
-                """Sends messages from the client websocket to the Gemini API."""
-                try:
-                    async for message in client_websocket:
-                        try:
-                            data = json.loads(message)
-                            if "realtime_input" in data:
-                                for chunk in data["realtime_input"]["media_chunks"]:
-                                    if chunk["mime_type"] == "audio/pcm":
-                                        await chat_session.send_message(parts=[{"mime_type": "audio/pcm", "data": base64.b64decode(chunk["data"])}])
+        print("Connected to Gemini API")
 
-                                    elif chunk["mime_type"] == "image/jpeg":
-                                        await chat_session.send_message(parts=[{"mime_type": "image/jpeg", "data": base64.b64decode(chunk["data"])}])
+        async def send_to_gemini():
+            """Sends messages from the client websocket to the Gemini API."""
+            try:
+                async for message in client_websocket:
+                    try:
+                        data = json.loads(message)
+                        if "realtime_input" in data:
+                            for chunk in data["realtime_input"]["media_chunks"]:
+                                if chunk["mime_type"] == "audio/pcm":
+                                    await chat_session.send_message(parts=[{"mime_type": "audio/pcm", "data": base64.b64decode(chunk["data"])}])
 
-                        except Exception as e:
-                            print(f"Error sending to Gemini: {e}")
-                    print("Client connection closed (send)")
-                except Exception as e:
-                    print(f"Error sending to Gemini: {e}")
-                finally:
-                    print("send_to_gemini closed")
+                                elif chunk["mime_type"] == "image/jpeg":
+                                    await chat_session.send_message(parts=[{"mime_type": "image/jpeg", "data": base64.b64decode(chunk["data"])}])
 
-            async def receive_from_gemini():
-                """Receives responses from the Gemini API and forwards them to the client, looping until turn is complete."""
-                try:
-                    while True:
-                        try:
-                            print("receiving from gemini")
-                            response = await chat_session.get_next_response()
-                            if response and response.parts:
-                                for part in response.parts:
-                                    if hasattr(part, 'text') and part.text is not None:
-                                        await client_websocket.send(json.dumps({"text": part.text}))
-                                    elif hasattr(part, 'inline_data') and part.inline_data is not None:
-                                        print("audio mime_type:", part.inline_data.mime_type)
-                                        base64_audio = base64.b64encode(part.inline_data.data).decode('utf-8')
-                                        await client_websocket.send(json.dumps({"audio": base64_audio}))
-                                        # Accumulate audio data (if needed - consider if transcription needs full audio)
-                                        if not hasattr(chat_session, 'audio_data'):
-                                            chat_session.audio_data = b''
-                                        chat_session.audio_data += part.inline_data.data
-                                        print("audio received")
+                    except Exception as e:
+                        print(f"Error sending to Gemini: {e}")
+                print("Client connection closed (send)")
+            except Exception as e:
+                print(f"Error sending to Gemini: {e}")
+            finally:
+                print("send_to_gemini closed")
 
-                            if response and response.is_end_of_stream:
-                                print('\n<Turn complete>')
-                                if hasattr(chat_session, 'audio_data'):
-                                    transcribed_text = await transcribe_audio(chat_session.audio_data)
-                                    if transcribed_text:
-                                        await client_websocket.send(json.dumps({
-                                            "text": transcribed_text
-                                        }))
-                                    del chat_session.audio_data # Clear accumulated audio
-                                break # End of the turn for the model
+        async def receive_from_gemini():
+            """Receives responses from the Gemini API and forwards them to the client, looping until turn is complete."""
+            try:
+                while True:
+                    try:
+                        print("receiving from gemini")
+                        response = await chat_session.get_next_response()
+                        if response and response.parts:
+                            for part in response.parts:
+                                if hasattr(part, 'text') and part.text is not None:
+                                    await client_websocket.send(json.dumps({"text": part.text}))
+                                elif hasattr(part, 'inline_data') and part.inline_data is not None:
+                                    print("audio mime_type:", part.inline_data.mime_type)
+                                    base64_audio = base64.b64encode(part.inline_data.data).decode('utf-8')
+                                    await client_websocket.send(json.dumps({"audio": base64_audio}))
+                                    # Accumulate audio data (if needed - consider if transcription needs full audio)
+                                    if not hasattr(chat_session, 'audio_data'):
+                                        chat_session.audio_data = b''
+                                    chat_session.audio_data += part.inline_data.data
+                                    print("audio received")
 
-                        except websockets.exceptions.ConnectionClosedOK:
-                            print("Client connection closed normally (receive)")
-                            break
-                        except Exception as e:
-                            print(f"Error receiving from Gemini: {e}")
-                            break
+                        if response and response.is_end_of_stream:
+                            print('\n<Turn complete>')
+                            if hasattr(chat_session, 'audio_data'):
+                                transcribed_text = await transcribe_audio(chat_session.audio_data)
+                                if transcribed_text:
+                                    await client_websocket.send(json.dumps({
+                                        "text": transcribed_text
+                                    }))
+                                del chat_session.audio_data # Clear accumulated audio
+                            break # End of the turn for the model
 
-                except Exception as e:
-                    print(f"Error receiving from Gemini: {e}")
-                finally:
-                    print("Gemini connection closed (receive)")
+                    except websockets.exceptions.ConnectionClosedOK:
+                        print("Client connection closed normally (receive)")
+                        break
+                    except Exception as e:
+                        print(f"Error receiving from Gemini: {e}")
+                        break
 
-            # Start send and receive tasks
-            send_task = asyncio.create_task(send_to_gemini())
-            receive_task = asyncio.create_task(receive_from_gemini())
-            await asyncio.gather(send_task, receive_task)
+            except Exception as e:
+                print(f"Error receiving from Gemini: {e}")
+            finally:
+                print("Gemini connection closed (receive)")
+
+        # Start send and receive tasks
+        send_task = asyncio.create_task(send_to_gemini())
+        receive_task = asyncio.create_task(receive_from_gemini())
+        await asyncio.gather(send_task, receive_task)
 
     except Exception as e:
         print(f"Error in Gemini session: {e}")
