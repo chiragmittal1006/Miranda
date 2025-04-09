@@ -6,7 +6,7 @@ import base64
 import io
 from pydub import AudioSegment
 import google.generativeai as generative
-import google.generativeai.generative_models as generative_models  # Import the correct module
+import google.generativeai.generative_models as generative_models
 import wave
 
 # Load API key from environment
@@ -21,11 +21,12 @@ async def gemini_session_handler(client_websocket: websockets.WebSocketServerPro
         config_message = await client_websocket.recv()
         config_data = json.loads(config_message)
         config = config_data.get("setup", {})
+        generation_config = config.get("generation_config")
 
-        # Initialize the Gemini model correctly
-        gemini_model = generative_models.GenerativeModel(model_name=MODEL)
+        # Initialize the Gemini model with the generation_config
+        gemini_model = generative_models.GenerativeModel(model_name=MODEL, generation_config=generation_config)
 
-        async with gemini_model.start_chat(generation_config=config.get("generation_config")) as chat_session:
+        async with gemini_model.start_chat() as chat_session:
             print("Connected to Gemini API")
 
             async def send_to_gemini():
@@ -167,7 +168,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+
 # pip install -U google-genai==0.5.0 llama-index==0.12.11 llama-index-llms-gemini==0.4.3 llama-index-embeddings-gemini==0.3.1 websockets pydub
 
 
